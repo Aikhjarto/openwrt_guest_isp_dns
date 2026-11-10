@@ -1,0 +1,14 @@
+#!/bin/sh
+# /etc/hotplug.d/iface/30-guest-dns: hand out the ISP's DNS servers (learned by DHCP on wan)
+# to the guest network (DHCP option 6) instead of a fixed server. Added 2026-10-29.
+[ "$ACTION" = ifup ] || [ "$ACTION" = ifupdate ] || exit 0
+[ "$INTERFACE" = wan ] || exit 0
+dns=$(ifstatus wan | jsonfilter -e '@["dns-server"][*]' | tr '\n' ',' | sed 's/,$//')
+[ -n "$dns" ] || exit 0
+new="6,$dns"
+[ "$(uci -q get dhcp.guest.dhcp_option)" = "$new" ] && exit 0
+uci -q delete dhcp.guest.dhcp_option
+uci add_list dhcp.guest.dhcp_option="$new"
+uci commit dhcp
+/etc/init.d/dnsmasq reload
+logger -t guest-dns "guest network: DHCP option 6 set to $dns"
